@@ -36,6 +36,7 @@ interface BookmarkState {
   reorderCategories: (ids: string[]) => void;
   addLink: (categoryId: string, link: Omit<Link, 'id' | 'createdAt'>) => void;
   updateLink: (categoryId: string, linkId: string, updates: Partial<Link>) => void;
+  moveLink: (fromCategoryId: string, toCategoryId: string, linkId: string) => void;
   removeLink: (categoryId: string, linkId: string) => void;
   reorderLinks: (categoryId: string, linkIds: string[]) => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
@@ -239,6 +240,30 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         ),
       },
     }));
+  },
+
+  moveLink: (fromCategoryId, toCategoryId, linkId) => {
+    if (fromCategoryId === toCategoryId) return;
+    set((state) => {
+      const fromCat = state.data.categories.find((c) => c.id === fromCategoryId);
+      const link = fromCat?.links.find((l) => l.id === linkId);
+      if (!link) return state;
+
+      return {
+        data: {
+          ...state.data,
+          categories: state.data.categories.map((cat) => {
+            if (cat.id === fromCategoryId) {
+              return { ...cat, links: cat.links.filter((l) => l.id !== linkId) };
+            }
+            if (cat.id === toCategoryId) {
+              return { ...cat, links: [...cat.links, link] };
+            }
+            return cat;
+          }),
+        },
+      };
+    });
   },
 
   removeLink: (categoryId, linkId) => {

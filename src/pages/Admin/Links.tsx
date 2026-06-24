@@ -8,14 +8,17 @@ import {
   X,
   ExternalLink,
   Search,
+  GripVertical,
 } from 'lucide-react';
 
 export default function AdminLinks() {
-  const { data, addLink, updateLink, removeLink } = useBookmarkStore();
+  const { data, addLink, updateLink, moveLink, removeLink } = useBookmarkStore();
 
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [draggedLink, setDraggedLink] = useState<{ categoryId: string; linkId: string } | null>(null);
+  const [dragOverCategory, setDragOverCategory] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     title: '',
@@ -78,6 +81,39 @@ export default function AdminLinks() {
       icon: editForm.icon.trim() || undefined,
     });
     setEditingId(null);
+  };
+
+  const handleDragStart = (e: React.DragEvent, categoryId: string, linkId: string) => {
+    setDraggedLink({ categoryId, linkId });
+    e.dataTransfer.effectAllowed = 'move';
+    (e.target as HTMLElement).style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    (e.target as HTMLElement).style.opacity = '1';
+    setDraggedLink(null);
+    setDragOverCategory(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, categoryId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverCategory !== categoryId) {
+      setDragOverCategory(categoryId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverCategory(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, toCategoryId: string) => {
+    e.preventDefault();
+    if (draggedLink && draggedLink.categoryId !== toCategoryId) {
+      moveLink(draggedLink.categoryId, toCategoryId, draggedLink.linkId);
+    }
+    setDraggedLink(null);
+    setDragOverCategory(null);
   };
 
   return (
@@ -180,21 +216,38 @@ export default function AdminLinks() {
           </div>
         ) : (
           filteredCategories.map((cat) => (
-            <div key={cat.id}>
-              <div className="flex items-center gap-2 mb-3">
+            <div
+              key={cat.id}
+              className={`rounded-2xl border transition-all ${
+                dragOverCategory === cat.id
+                  ? 'border-blue-500 border-dashed bg-blue-500/5'
+                  : 'border-slate-200 dark:border-slate-800'
+              }`}
+              onDragOver={(e) => handleDragOver(e, cat.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, cat.id)}
+            >
+              <div className="flex items-center gap-2 mb-3 p-4 pb-0">
                 <span className="text-lg">{cat.icon}</span>
                 <span className="font-medium">{cat.name}</span>
                 <span className="text-xs text-slate-400">({cat.links.length})</span>
+                {dragOverCategory === cat.id && (
+                  <span className="text-xs text-blue-500 ml-auto">放置到这里</span>
+                )}
               </div>
               {cat.links.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 p-4 pt-2">
                   {cat.links.map((link) => (
                     <div
                       key={link.id}
-                      className="flex items-center gap-3 rounded-xl px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, cat.id, link.id)}
+                      onDragEnd={handleDragEnd}
+                      className="flex items-center gap-3 rounded-xl px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-grab active:cursor-grabbing hover:border-blue-300 dark:hover:border-blue-700 transition"
                     >
                       {editingId === link.id ? (
                         <>
+                          <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600 cursor-grab" />
                           <div className="flex-1 grid grid-cols-2 gap-2">
                             <input
                               value={editForm.title}
@@ -226,6 +279,7 @@ export default function AdminLinks() {
                         </>
                       ) : (
                         <>
+                          <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600 cursor-grab" />
                           <img
                             src={
                               link.icon ||
@@ -277,8 +331,14 @@ export default function AdminLinks() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl px-4 py-6 text-center text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700">
-                  暂无网址
+                <div
+                  className={`mx-4 mb-4 rounded-xl px-4 py-6 text-center text-sm bg-slate-50 dark:bg-slate-800/30 border-dashed transition ${
+                    dragOverCategory === cat.id
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-400'
+                  }`}
+                >
+                  {dragOverCategory === cat.id ? '放置到这里' : '暂无网址'}
                 </div>
               )}
             </div>
