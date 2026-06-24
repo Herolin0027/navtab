@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type DragEvent } from 'react';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
 import {
   Plus,
@@ -83,19 +83,19 @@ export default function AdminLinks() {
     setEditingId(null);
   };
 
-  const handleDragStart = (e: React.DragEvent, categoryId: string, linkId: string) => {
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, categoryId: string, linkId: string) => {
     setDraggedLink({ categoryId, linkId });
     e.dataTransfer.effectAllowed = 'move';
     (e.target as HTMLElement).style.opacity = '0.5';
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
+  const handleDragEnd = (e: DragEvent<HTMLDivElement>) => {
     (e.target as HTMLElement).style.opacity = '1';
     setDraggedLink(null);
     setDragOverCategory(null);
   };
 
-  const handleDragOver = (e: React.DragEvent, categoryId: string) => {
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, categoryId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dragOverCategory !== categoryId) {
@@ -107,7 +107,7 @@ export default function AdminLinks() {
     setDragOverCategory(null);
   };
 
-  const handleDrop = (e: React.DragEvent, toCategoryId: string) => {
+  const handleDrop = (e: DragEvent<HTMLDivElement>, toCategoryId: string) => {
     e.preventDefault();
     if (draggedLink && draggedLink.categoryId !== toCategoryId) {
       moveLink(draggedLink.categoryId, toCategoryId, draggedLink.linkId);

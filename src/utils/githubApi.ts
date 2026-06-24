@@ -44,7 +44,9 @@ export async function getFile(config: GitHubConfig): Promise<GitHubFileResponse>
 
   return {
     content: btoa(unescape(encodeURIComponent(file.content))),
-    sha: gist.id, // 使用 gist id 作为 sha
+    sha: gist.id,
+    name: fileName,
+    path: fileName,
   };
 }
 
