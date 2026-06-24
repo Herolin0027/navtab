@@ -43,48 +43,8 @@ function decodeContent(file) {
 }
 
 function parseYaml(yamlContent) {
-  // Simple YAML parser for our specific format
-  const lines = yamlContent.split('\n');
   const result = { settings: {}, categories: [] };
-  let currentCategory = null;
-  let currentLink = null;
-  let indentLevel = 0;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    const indent = line.search(/\S/);
-    const level = indent === -1 ? 0 : Math.floor(indent / 2);
-
-    if (level === 0 && trimmed.endsWith(':')) {
-      const key = trimmed.slice(0, -1);
-      if (key === 'settings') {
-        currentCategory = null;
-        currentLink = null;
-      } else if (key === 'categories') {
-        currentCategory = null;
-        currentLink = null;
-      }
-    } else if (level === 1 && trimmed === '- id:') {
-      // Start of new category
-    } else if (level === 1 && trimmed.startsWith('- ')) {
-      // Category start
-    } else if (level === 2 && currentCategory && !currentLink) {
-      const colonIdx = trimmed.indexOf(':');
-      if (colonIdx > 0) {
-        const key = trimmed.slice(0, colonIdx).trim();
-        const val = trimmed.slice(colonIdx + 1).trim();
-        if (key === 'links') {
-          // links array start
-        } else {
-          currentCategory[key] = val.replace(/^["']|["']$/g, '');
-        }
-      }
-    }
-  }
-
-  // Fallback: use a more robust approach with regex
   try {
     const settingsMatch = yamlContent.match(/settings:\s*\n((?:\s+\w+:\s*.*\n)*)/);
     if (settingsMatch) {
@@ -161,47 +121,117 @@ function generateId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-// Main
-(async () => {
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showConfigScreen(onSaved) {
   const root = document.getElementById('root');
+  root.innerHTML = `
+    <div class="header"><div class="icon"></div><h1>配置 GitHub 同步</h1></div>
+    <div id="msg"></div>
+    <div class="field">
+      <label>Token</label>
+      <input type="password" id="token" placeholder="github_pat_..." />
+    </div>
+    <div class="field">
+      <label>仓库所有者</label>
+      <input type="text" id="owner" placeholder="你的 GitHub 用户名" />
+    </div>
+    <div class="field">
+      <label>仓库名称</label>
+      <input type="text" id="repo" placeholder="navtab-data" />
+    </div>
+    <div class="field">
+      <label>文件路径</label>
+      <input type="text" id="path" value="data/bookmarks.yml" />
+    </div>
+    <div class="field">
+      <label>分支</label>
+      <input type="text" id="branch" value="main" />
+    </div>
+    <button class="btn" id="saveBtn">保存配置</button>
+    <p class="info">配置会保存在浏览器本地，安全可靠</p>
+  `;
 
-  try {
-    // Get current tab info
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const pageTitle = tab.title || '';
-    const pageUrl = tab.url || '';
-    const pageIcon = `https://www.google.com/s2/favicons?domain=${new URL(pageUrl).hostname}&sz=64`;
+  chrome.storage.local.get(['navtab_config'], (result) => {
+    const config = result.navtab_config;
+    if (config) {
+      document.getElementById('token').value = config.token || '';
+      document.getElementById('owner').value = config.owner || '';
+      document.getElementById('repo').value = config.repo || '';
+      document.getElementById('path').value = config.path || 'data/bookmarks.yml';
+      document.getElementById('branch').value = config.branch || 'main';
+    }
+  });
 
-    // Get stored config
-    const stored = await chrome.storage.local.get(['navtab_config']);
-    const config = stored.navtab_config;
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const token = document.getElementById('token').value.trim();
+    const owner = document.getElementById('owner').value.trim();
+    const repo = document.getElementById('repo').value.trim();
+    const path = document.getElementById('path').value.trim();
+    const branch = document.getElementById('branch').value.trim();
+    const msg = document.getElementById('msg');
 
-    if (!config) {
-      root.innerHTML = `
-        <div class="header"><div class="icon"></div><h1>NavTab 收藏助手</h1></div>
-        <div class="error">尚未配置 GitHub 同步</div>
-        <p class="info">请先在 NavTab 后台管理中配置 GitHub Token</p>
-      `;
+    if (!token || !owner || !repo) {
+      msg.innerHTML = '<div class="error">请填写 Token、仓库所有者和仓库名称</div>';
       return;
     }
 
-    // Fetch current data from GitHub
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
+    const config = { token, owner, repo, path, branch };
+
+    try {
+      await getFile(config);
+      await chrome.storage.local.set({ navtab_config: config });
+      msg.innerHTML = '<div class="success">配置成功！</div>';
+      btn.textContent = '已保存';
+      setTimeout(() => onSaved && onSaved(config), 800);
+    } catch (e) {
+      msg.innerHTML = `<div class="error">测试失败: ${e.message}，请检查配置</div>`;
+      btn.disabled = false;
+      btn.textContent = '保存配置';
+    }
+  });
+}
+
+async function showBookmarkScreen(config) {
+  const root = document.getElementById('root');
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const pageTitle = tab.title || '';
+    const pageUrl = tab.url || '';
+    let pageIcon = '';
+    try {
+      pageIcon = `https://www.google.com/s2/favicons?domain=${new URL(pageUrl).hostname}&sz=64`;
+    } catch (e) {}
+
     let fileData;
     try {
       fileData = await getFile(config);
     } catch (e) {
       root.innerHTML = `
-        <div class="header"><div class="icon"></div><h1>NavTab 收藏助手</h1></div>
-        <div class="error">无法读取 GitHub 数据，请检查配置</div>
+        <div class="header"><div class="icon"></div><h1>收藏到 NavTab</h1></div>
+        <div class="error">无法读取 GitHub 数据</div>
         <p class="info">${e.message}</p>
+        <a href="#" class="config-link" id="configLink">重新配置</a>
       `;
+      document.getElementById('configLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        showConfigScreen(showBookmarkScreen);
+      });
       return;
     }
 
     const content = decodeContent(fileData);
     const data = parseYaml(content);
 
-    // Build UI
     const categoryOptions = data.categories
       .map((c) => `<option value="${c.id}">${c.icon} ${c.name}</option>`)
       .join('');
@@ -229,8 +259,13 @@ function generateId() {
         <input type="text" id="description" placeholder="简短描述..." />
       </div>
       <button class="btn" id="saveBtn">保存收藏</button>
-      <p class="info">数据将同步到你的 GitHub 仓库</p>
+      <a href="#" class="config-link" id="configLink">配置设置</a>
     `;
+
+    document.getElementById('configLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      showConfigScreen(showBookmarkScreen);
+    });
 
     document.getElementById('saveBtn').addEventListener('click', async () => {
       const title = document.getElementById('title').value.trim();
@@ -249,7 +284,6 @@ function generateId() {
       btn.textContent = '保存中...';
 
       try {
-        // Re-fetch to get latest sha
         const latestFile = await getFile(config);
         const latestData = parseYaml(decodeContent(latestFile));
 
@@ -286,10 +320,16 @@ function generateId() {
       <div class="error">出错了: ${e.message}</div>
     `;
   }
-})();
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
 }
+
+// Main
+(async () => {
+  const stored = await chrome.storage.local.get(['navtab_config']);
+  const config = stored.navtab_config;
+
+  if (!config || !config.token) {
+    showConfigScreen(showBookmarkScreen);
+  } else {
+    showBookmarkScreen(config);
+  }
+})();
