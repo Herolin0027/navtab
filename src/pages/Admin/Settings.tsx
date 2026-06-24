@@ -233,6 +233,28 @@ export default function AdminSettings() {
               ))}
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">布局样式</label>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'top', label: '分类在上' },
+                { value: 'sidebar', label: '侧边栏 (iTab 风格)' },
+              ].map((l) => (
+                <button
+                  key={l.value}
+                  onClick={() => updateSettings({ layout: l.value as 'top' | 'sidebar' })}
+                  className={`rounded-xl px-4 py-2 text-sm border transition ${
+                    safeData.settings.layout === l.value
+                      ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

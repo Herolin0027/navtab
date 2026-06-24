@@ -52,6 +52,7 @@ function getDefaultData(): BookmarkData {
       theme: 'dark',
       background: 'gradient-blue',
       searchEngine: 'google',
+      layout: 'top',
     },
     categories: [],
   };

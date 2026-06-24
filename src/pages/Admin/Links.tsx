@@ -259,21 +259,36 @@ export default function AdminLinks() {
                       {editingId === link.id ? (
                         <>
                           <GripVertical className="w-4 h-4 text-slate-300 dark:text-slate-600 cursor-grab" />
-                          <div className="flex-1 grid grid-cols-2 gap-2">
-                            <input
-                              value={editForm.title}
+                          <div className="flex-1 space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                value={editForm.title}
+                                onChange={(e) =>
+                                  setEditForm({ ...editForm, title: e.target.value })
+                                }
+                                className="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-sm"
+                              />
+                              <input
+                                value={editForm.url}
+                                onChange={(e) =>
+                                  setEditForm({ ...editForm, url: e.target.value })
+                                }
+                                className="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-sm"
+                              />
+                            </div>
+                            <select
+                              value={editForm.categoryId}
                               onChange={(e) =>
-                                setEditForm({ ...editForm, title: e.target.value })
+                                setEditForm({ ...editForm, categoryId: e.target.value })
                               }
-                              className="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-sm"
-                            />
-                            <input
-                              value={editForm.url}
-                              onChange={(e) =>
-                                setEditForm({ ...editForm, url: e.target.value })
-                              }
-                              className="rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-sm"
-                            />
+                              className="w-full rounded-lg px-3 py-1.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-sm"
+                            >
+                              {data.categories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.icon} {c.name}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <button
                             onClick={() => saveEdit(cat.id, link.id)}
@@ -282,7 +297,10 @@ export default function AdminLinks() {
                             <Check className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setEditingId(null)}
+                            onClick={() => {
+                              setEditingId(null);
+                              setEditingCategoryId(null);
+                            }}
                             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                           >
                             <X className="w-4 h-4" />

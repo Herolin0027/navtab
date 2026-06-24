@@ -10,6 +10,7 @@ export interface AppSettings {
   theme: 'dark' | 'light';
   background: string;
   searchEngine: string;
+  layout: 'top' | 'sidebar';
 }
 
 export interface Link {
