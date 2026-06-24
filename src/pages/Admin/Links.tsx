@@ -173,7 +173,10 @@ export default function AdminLinks() {
       <div className="space-y-6">
         {data.categories.length === 0 ? (
           <div className="text-center py-16 text-slate-400">
-            还没有分类，先去<a href="#/admin/categories" className="text-blue-500 hover:underline">创建分类</a>
+            还没有分类，先去{' '}
+            <a href="#/admin/categories" className="text-blue-500 hover:underline">
+              创建分类
+            </a>
           </div>
         ) : (
           filteredCategories.map((cat) => (
@@ -274,7 +277,7 @@ export default function AdminLinks() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl px-4 py-8 text-center text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700">
+                <div className="rounded-xl px-4 py-6 text-center text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700">
                   暂无网址
                 </div>
               )}

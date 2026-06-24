@@ -23,6 +23,7 @@ interface BookmarkState {
   error: string | null;
   fileSha: string | null;
 
+  // actions
   init: () => Promise<void>;
   loadLocalDataFile: () => Promise<void>;
   setConfig: (config: GitHubConfig) => Promise<void>;
@@ -54,235 +55,213 @@ function getDefaultData(): BookmarkData {
   };
 }
 
-export const useBookmarkStore = create<BookmarkState>((set, get) => {
-  const syncAfterChange = async () => {
-    const { config, data } = get();
-    await setLocalData(data);
+export const useBookmarkStore = create<BookmarkState>((set, get) => ({
+  data: getDefaultData(),
+  config: null,
+  loading: true,
+  syncing: false,
+  error: null,
+  fileSha: null,
+
+  init: async () => {
+    set({ loading: true, error: null });
+    try {
+      const [localData, localConfig] = await Promise.all([
+        getLocalData(),
+        getLocalConfig(),
+      ]);
+
+      const data = localData || getDefaultData();
+      set({ data, config: localConfig, loading: false });
+
+      if (localConfig) {
+        await get().syncFromGitHub();
+      } else if (import.meta.env.VITE_DATA_FILE) {
+        await get().loadLocalDataFile();
+      }
+    } catch (err: any) {
+      set({ error: err.message || '初始化失败', loading: false });
+    }
+  },
+
+  loadLocalDataFile: async () => {
+    try {
+      const response = await fetch(import.meta.env.VITE_DATA_FILE);
+      if (!response.ok) throw new Error('文件不存在');
+      const content = await response.text();
+      const data = parseBookmarks(content);
+      await setLocalData(data);
+      set({ data, loading: false });
+    } catch (err: any) {
+      console.log('本地文件加载失败，使用默认数据:', err.message);
+    }
+  },
+
+  setConfig: async (config) => {
+    await setLocalConfig(config);
+    set({ config });
+    await get().syncFromGitHub();
+  },
+
+  syncFromGitHub: async () => {
+    const { config } = get();
     if (!config) return;
+
+    set({ syncing: true, error: null });
     try {
       const file = await getFile(config);
-      const result = await updateFile(config, stringifyBookmarks(data), file.sha);
-      set({ fileSha: result.sha });
+      const content = decodeContent(file);
+      const data = parseBookmarks(content);
+      await setLocalData(data);
       await setLastSync(Date.now());
+      set({ data, fileSha: file.sha, syncing: false });
     } catch (err: any) {
-      set({ error: err.message || '同步失败' });
+      set({ error: err.message || '同步失败', syncing: false });
     }
-  };
+  },
 
-  return {
-    data: getDefaultData(),
-    config: null,
-    loading: true,
-    syncing: false,
-    error: null,
-    fileSha: null,
+  syncToGitHub: async () => {
+    const { config, data, fileSha } = get();
+    if (!config) {
+      set({ error: '未配置 GitHub' });
+      return;
+    }
 
-    init: async () => {
-      set({ loading: true, error: null });
-      try {
-        const [localData, localConfig] = await Promise.all([
-          getLocalData(),
-          getLocalConfig(),
-        ]);
-
-        const data = localData || getDefaultData();
-        set({ data, config: localConfig, loading: false });
-
-        if (localConfig) {
-          await get().syncFromGitHub();
-        } else if (import.meta.env.VITE_DATA_FILE) {
-          await get().loadLocalDataFile();
-        }
-      } catch (err: any) {
-        set({ error: err.message || '初始化失败', loading: false });
-      }
-    },
-
-    loadLocalDataFile: async () => {
-      try {
-        const response = await fetch(import.meta.env.VITE_DATA_FILE);
-        if (!response.ok) throw new Error('文件不存在');
-        const content = await response.text();
-        const data = parseBookmarks(content);
-        await setLocalData(data);
-        set({ data, loading: false });
-      } catch (err: any) {
-        console.log('本地文件加载失败，使用默认数据:', err.message);
-      }
-    },
-
-    setConfig: async (config) => {
-      await setLocalConfig(config);
-      set({ config });
-      await get().syncFromGitHub();
-    },
-
-    syncFromGitHub: async () => {
-      const { config } = get();
-      if (!config) return;
-
-      set({ syncing: true, error: null });
-      try {
+    set({ syncing: true, error: null });
+    try {
+      let currentSha = fileSha;
+      if (!currentSha) {
         const file = await getFile(config);
-        const content = decodeContent(file);
-        const data = parseBookmarks(content);
-        await setLocalData(data);
-        await setLastSync(Date.now());
-        set({ data, fileSha: file.sha, syncing: false });
-      } catch (err: any) {
-        set({ error: err.message || '同步失败', syncing: false });
+        currentSha = file.sha;
       }
-    },
+      const content = stringifyBookmarks(data);
+      await updateFile(config, content, currentSha);
+      await setLastSync(Date.now());
 
-    syncToGitHub: async () => {
-      const { config, data, fileSha } = get();
-      if (!config) {
-        set({ error: '未配置 GitHub' });
-        return;
-      }
+      // refresh sha
+      const newFile = await getFile(config);
+      set({ fileSha: newFile.sha, syncing: false });
+    } catch (err: any) {
+      set({ error: err.message || '推送失败', syncing: false });
+    }
+  },
 
-      set({ syncing: true, error: null });
-      try {
-        let currentSha = fileSha;
-        if (!currentSha) {
-          const file = await getFile(config);
-          currentSha = file.sha;
-        }
-        const content = stringifyBookmarks(data);
-        const result = await updateFile(config, content, currentSha);
-        await setLastSync(Date.now());
-        set({ fileSha: result.sha, syncing: false });
-      } catch (err: any) {
-        set({ error: err.message || '推送失败', syncing: false });
-      }
-    },
+  addCategory: (category) => {
+    const newCat: Category = {
+      ...category,
+      id: generateId(),
+      links: [],
+    };
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: [...state.data.categories, newCat],
+      },
+    }));
+  },
 
-    addCategory: (category) => {
-      const newCat: Category = {
-        ...category,
-        id: generateId(),
-        links: [],
-      };
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: [...state.data.categories, newCat],
-        },
-      }));
-      syncAfterChange();
-    },
+  updateCategory: (id, updates) => {
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: state.data.categories.map((cat) =>
+          cat.id === id ? { ...cat, ...updates } : cat
+        ),
+      },
+    }));
+  },
 
-    updateCategory: (id, updates) => {
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: state.data.categories.map((cat) =>
-            cat.id === id ? { ...cat, ...updates } : cat
-          ),
-        },
-      }));
-      syncAfterChange();
-    },
+  removeCategory: (id) => {
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: state.data.categories.filter((cat) => cat.id !== id),
+      },
+    }));
+  },
 
-    removeCategory: (id) => {
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: state.data.categories.filter((cat) => cat.id !== id),
-        },
-      }));
-      syncAfterChange();
-    },
+  reorderCategories: (ids) => {
+    set((state) => {
+      const map = new Map(state.data.categories.map((c) => [c.id, c]));
+      const categories = ids
+        .map((id) => map.get(id))
+        .filter(Boolean)
+        .map((cat, index) => ({ ...cat!, order: index }));
+      return { data: { ...state.data, categories } };
+    });
+  },
 
-    reorderCategories: (ids) => {
-      set((state) => {
-        const map = new Map(state.data.categories.map((c) => [c.id, c]));
-        const categories = ids
-          .map((id) => map.get(id))
-          .filter(Boolean)
-          .map((cat, index) => ({ ...cat!, order: index }));
-        return { data: { ...state.data, categories } };
-      });
-      syncAfterChange();
-    },
+  addLink: (categoryId, link) => {
+    const newLink: Link = {
+      ...link,
+      id: generateId(),
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: state.data.categories.map((cat) =>
+          cat.id === categoryId
+            ? { ...cat, links: [...cat.links, newLink] }
+            : cat
+        ),
+      },
+    }));
+  },
 
-    addLink: (categoryId, link) => {
-      const newLink: Link = {
-        ...link,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-      };
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: state.data.categories.map((cat) =>
-            cat.id === categoryId
-              ? { ...cat, links: [...cat.links, newLink] }
-              : cat
-          ),
-        },
-      }));
-      syncAfterChange();
-    },
+  updateLink: (categoryId, linkId, updates) => {
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: state.data.categories.map((cat) =>
+          cat.id === categoryId
+            ? {
+                ...cat,
+                links: cat.links.map((link) =>
+                  link.id === linkId ? { ...link, ...updates } : link
+                ),
+              }
+            : cat
+        ),
+      },
+    }));
+  },
 
-    updateLink: (categoryId, linkId, updates) => {
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: state.data.categories.map((cat) =>
-            cat.id === categoryId
-              ? {
-                  ...cat,
-                  links: cat.links.map((link) =>
-                    link.id === linkId ? { ...link, ...updates } : link
-                  ),
-                }
-              : cat
-          ),
-        },
-      }));
-      syncAfterChange();
-    },
+  removeLink: (categoryId, linkId) => {
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: state.data.categories.map((cat) =>
+          cat.id === categoryId
+            ? { ...cat, links: cat.links.filter((link) => link.id !== linkId) }
+            : cat
+        ),
+      },
+    }));
+  },
 
-    removeLink: (categoryId, linkId) => {
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: state.data.categories.map((cat) =>
-            cat.id === categoryId
-              ? { ...cat, links: cat.links.filter((link) => link.id !== linkId) }
-              : cat
-          ),
-        },
-      }));
-      syncAfterChange();
-    },
+  reorderLinks: (categoryId, linkIds) => {
+    set((state) => ({
+      data: {
+        ...state.data,
+        categories: state.data.categories.map((cat) => {
+          if (cat.id !== categoryId) return cat;
+          const map = new Map(cat.links.map((l) => [l.id, l]));
+          const links = linkIds
+            .map((id) => map.get(id))
+            .filter(Boolean) as Link[];
+          return { ...cat, links };
+        }),
+      },
+    }));
+  },
 
-    reorderLinks: (categoryId, linkIds) => {
-      set((state) => ({
-        data: {
-          ...state.data,
-          categories: state.data.categories.map((cat) => {
-            if (cat.id !== categoryId) return cat;
-            const map = new Map(cat.links.map((l) => [l.id, l]));
-            const links = linkIds
-              .map((id) => map.get(id))
-              .filter(Boolean) as Link[];
-            return { ...cat, links };
-          }),
-        },
-      }));
-      syncAfterChange();
-    },
-
-    updateSettings: (settings) => {
-      set((state) => ({
-        data: {
-          ...state.data,
-          settings: { ...state.data.settings, ...settings },
-        },
-      }));
-      syncAfterChange();
-    },
-  };
-});
+  updateSettings: (settings) => {
+    set((state) => ({
+      data: {
+        ...state.data,
+        settings: { ...state.data.settings, ...settings },
+      },
+    }));
+  },
+}));

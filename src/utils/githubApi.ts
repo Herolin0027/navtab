@@ -28,48 +28,24 @@ export async function updateFile(
   config: GitHubConfig,
   content: string,
   sha: string,
-  message = 'Update bookmarks',
-  retries = 3
-): Promise<{ sha: string }> {
-  let currentSha = sha;
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
-      const body = {
-        message,
-        content: btoa(unescape(encodeURIComponent(content))),
-        sha: currentSha,
-        branch: config.branch,
-      };
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: getHeaders(config.token),
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        return { sha: data.content.sha };
-      }
-
-      const errText = await res.text();
-      lastError = new Error(`GitHub API error: ${res.status} ${errText}`);
-
-      if (res.status === 409 && attempt < retries) {
-        const file = await getFile(config);
-        currentSha = file.sha;
-        continue;
-      }
-
-      throw lastError;
-    } catch (e) {
-      if (attempt >= retries) throw e;
-    }
+  message = 'Update bookmarks'
+): Promise<void> {
+  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+  const body = {
+    message,
+    content: btoa(unescape(encodeURIComponent(content))),
+    sha,
+    branch: config.branch,
+  };
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: getHeaders(config.token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GitHub API error: ${res.status} ${err}`);
   }
-
-  throw lastError || new Error('Update failed');
 }
 
 export async function testConnection(config: GitHubConfig): Promise<boolean> {
