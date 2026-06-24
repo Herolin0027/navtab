@@ -28,11 +28,13 @@ export default function AdminLinks() {
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     title: '',
     url: '',
     description: '',
     icon: '',
+    categoryId: '',
   });
 
   const filteredCategories = data.categories.map((cat) => ({
@@ -57,7 +59,7 @@ export default function AdminLinks() {
     setShowAdd(false);
   };
 
-  const startEdit = (link: {
+  const startEdit = (categoryId: string, link: {
     id: string;
     title: string;
     url: string;
@@ -65,22 +67,31 @@ export default function AdminLinks() {
     icon?: string;
   }) => {
     setEditingId(link.id);
+    setEditingCategoryId(categoryId);
     setEditForm({
       title: link.title,
       url: link.url,
       description: link.description || '',
       icon: link.icon || '',
+      categoryId: categoryId,
     });
   };
 
   const saveEdit = (categoryId: string, linkId: string) => {
-    updateLink(categoryId, linkId, {
+    // 如果分类改变了，需要移动链接
+    if (editForm.categoryId !== categoryId && editForm.categoryId) {
+      moveLink(categoryId, editForm.categoryId, linkId);
+    }
+    // 更新链接内容（在新的分类下）
+    const targetCategoryId = editForm.categoryId || categoryId;
+    updateLink(targetCategoryId, linkId, {
       title: editForm.title.trim(),
       url: editForm.url.trim(),
       description: editForm.description.trim() || undefined,
       icon: editForm.icon.trim() || undefined,
     });
     setEditingId(null);
+    setEditingCategoryId(null);
   };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>, categoryId: string, linkId: string) => {
