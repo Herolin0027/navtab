@@ -19,8 +19,10 @@
 2. 点击 **Generate new token**
 3. **Token name**：随便填，比如 `navtab`
 4. **Expiration**：选择有效期，建议选 `No expiration`
-5. **Repository access**：可以选 `Public Repositories (read-only)` 或不选
-6. **Account permissions** → **Gists**：选择 **Read and write**
+5. **Repository access**：可以选 `All repositories` 或 `Only select repositories`（不影响 Gist 权限）
+6. **Permissions 设置**：
+   - **Repository permissions**：全部选 `No access`（不需要仓库权限）
+   - **Account permissions** → **Gists**：选择 **Read and write**
 7. 点击 **Generate token**
 8. 复制生成的 Token（以 `ghp_` 开头）
 
