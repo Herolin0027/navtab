@@ -55,6 +55,21 @@ function getDefaultData(): BookmarkData {
   };
 }
 
+async function syncLocal(state: BookmarkState): Promise<void> {
+  const { config, data } = state;
+  await setLocalData(data);
+  if (config) {
+    try {
+      const file = await getFile(config);
+      const result = await updateFile(config, stringifyBookmarks(data), file.sha);
+      set({ fileSha: result.sha });
+      await setLastSync(Date.now());
+    } catch (err: any) {
+      set({ error: err.message || '同步失败' });
+    }
+  }
+}
+
 export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   data: getDefaultData(),
   config: null,
@@ -158,6 +173,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         categories: [...state.data.categories, newCat],
       },
     }));
+    syncLocal(get());
   },
 
   updateCategory: (id, updates) => {
@@ -169,6 +185,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         ),
       },
     }));
+    syncLocal(get());
   },
 
   removeCategory: (id) => {
@@ -178,6 +195,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         categories: state.data.categories.filter((cat) => cat.id !== id),
       },
     }));
+    syncLocal(get());
   },
 
   reorderCategories: (ids) => {
@@ -189,6 +207,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         .map((cat, index) => ({ ...cat!, order: index }));
       return { data: { ...state.data, categories } };
     });
+    syncLocal(get());
   },
 
   addLink: (categoryId, link) => {
@@ -207,6 +226,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         ),
       },
     }));
+    syncLocal(get());
   },
 
   updateLink: (categoryId, linkId, updates) => {
@@ -225,6 +245,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         ),
       },
     }));
+    syncLocal(get());
   },
 
   removeLink: (categoryId, linkId) => {
@@ -238,6 +259,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         ),
       },
     }));
+    syncLocal(get());
   },
 
   reorderLinks: (categoryId, linkIds) => {
@@ -254,6 +276,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         }),
       },
     }));
+    syncLocal(get());
   },
 
   updateSettings: (settings) => {
@@ -263,5 +286,6 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
         settings: { ...state.data.settings, ...settings },
       },
     }));
+    syncLocal(get());
   },
 }));

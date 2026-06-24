@@ -171,15 +171,19 @@ export default function AdminLinks() {
 
       {/* Links List */}
       <div className="space-y-6">
-        {filteredCategories.map(
-          (cat) =>
-            cat.links.length > 0 && (
-              <div key={cat.id}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">{cat.icon}</span>
-                  <span className="font-medium">{cat.name}</span>
-                  <span className="text-xs text-slate-400">({cat.links.length})</span>
-                </div>
+        {data.categories.length === 0 ? (
+          <div className="text-center py-16 text-slate-400">
+            还没有分类，先去<a href="#/admin/categories" className="text-blue-500 hover:underline">创建分类</a>
+          </div>
+        ) : (
+          filteredCategories.map((cat) => (
+            <div key={cat.id}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">{cat.icon}</span>
+                <span className="font-medium">{cat.name}</span>
+                <span className="text-xs text-slate-400">({cat.links.length})</span>
+              </div>
+              {cat.links.length > 0 ? (
                 <div className="space-y-2">
                   {cat.links.map((link) => (
                     <div
@@ -269,14 +273,19 @@ export default function AdminLinks() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )
+              ) : (
+                <div className="rounded-xl px-4 py-8 text-center text-sm text-slate-400 bg-slate-50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-700">
+                  暂无网址
+                </div>
+              )}
+            </div>
+          ))
         )}
       </div>
 
-      {filteredCategories.every((c) => c.links.length === 0) && (
+      {search && filteredCategories.every((c) => c.links.length === 0) && (
         <div className="text-center py-16 text-slate-400">
-          {search ? '未找到匹配的网址' : '暂无网址，点击上方按钮添加'}
+          未找到匹配的网址
         </div>
       )}
     </div>
