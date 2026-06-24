@@ -6,6 +6,15 @@ import { Key, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
 export default function AdminSettings() {
   const { config, setConfig, data, updateSettings, error } = useBookmarkStore();
 
+  // 确保 data 存在
+  const safeData = data || {
+    settings: {
+      theme: 'dark',
+      background: 'gradient-blue',
+      searchEngine: 'google',
+    },
+  };
+
   const [form, setForm] = useState({
     token: config?.token || '',
     repo: config?.repo || '', // Gist ID
@@ -190,7 +199,7 @@ export default function AdminSettings() {
                   key={t.value}
                   onClick={() => updateSettings({ theme: t.value as 'dark' | 'light' })}
                   className={`rounded-xl px-4 py-2 text-sm border transition ${
-                    data.settings.theme === t.value
+                    safeData.settings.theme === t.value
                       ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
                       : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
@@ -214,7 +223,7 @@ export default function AdminSettings() {
                   key={b.value}
                   onClick={() => updateSettings({ background: b.value })}
                   className={`rounded-xl px-4 py-2 text-sm border transition ${
-                    data.settings.background === b.value
+                    safeData.settings.background === b.value
                       ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400'
                       : 'border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
