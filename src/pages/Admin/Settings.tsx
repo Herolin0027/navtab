@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
 import { testConnection } from '@/utils/githubApi';
-import { Key, GitBranch, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Key, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function AdminSettings() {
   const { config, setConfig, data, updateSettings, error } = useBookmarkStore();
 
   const [form, setForm] = useState({
     token: config?.token || '',
-    owner: config?.owner || '',
-    repo: config?.repo || '',
-    path: config?.path || 'data/bookmarks.yml',
-    branch: config?.branch || 'main',
+    repo: config?.repo || '', // Gist ID
+    path: config?.path || 'bookmarks.yml',
   });
 
   const [testing, setTesting] = useState(false);
@@ -25,10 +23,10 @@ export default function AdminSettings() {
     try {
       await setConfig({
         token: form.token,
-        owner: form.owner,
+        owner: '',
         repo: form.repo,
         path: form.path,
-        branch: form.branch,
+        branch: '',
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -44,10 +42,10 @@ export default function AdminSettings() {
     setTestResult(null);
     const ok = await testConnection({
       token: form.token,
-      owner: form.owner,
+      owner: '',
       repo: form.repo,
       path: form.path,
-      branch: form.branch,
+      branch: '',
     });
     setTestResult(ok);
     setTesting(false);
@@ -64,12 +62,12 @@ export default function AdminSettings() {
 
       {/* Quick Start Guide */}
       <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-5 space-y-3">
-        <h3 className="font-medium text-blue-600 dark:text-blue-400">双仓库模式（代码 + 数据分离）</h3>
+        <h3 className="font-medium text-blue-600 dark:text-blue-400">使用 GitHub Gist 同步数据</h3>
         <ol className="text-sm text-slate-600 dark:text-slate-300 space-y-2">
-          <li>① 创建代码仓库 <code className="bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">navtab</code>（存放前端代码，部署到 Pages）</li>
-          <li>② 创建数据仓库 <code className="bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">navtab-data</code>（存放收藏数据）</li>
-          <li>③ 生成 Fine-grained PAT，授予数据仓库 Contents 读写权限</li>
-          <li>④ 下方表单填写数据仓库信息，数据自动存到 <code className="bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">data/bookmarks.yml</code></li>
+          <li>① 前往 <a href="https://gist.github.com" target="_blank" className="text-blue-500 hover:underline">gist.github.com</a> 创建一个新的 Secret Gist</li>
+          <li>② 创建后会得到一个 Gist ID（URL 中 <code className="bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">gist.github.com/&lt;此处为ID&gt;</code>）</li>
+          <li>③ 生成 Fine-grained PAT，授予 Gist 读写权限（需要 Gist 范围）</li>
+          <li>④ 下方填写 Token 和 Gist ID，数据会自动同步</li>
         </ol>
       </div>
 
@@ -77,7 +75,7 @@ export default function AdminSettings() {
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/50 p-6 space-y-5">
         <h2 className="font-semibold flex items-center gap-2">
           <Key className="w-4.5 h-4.5 text-blue-500" />
-          GitHub 配置
+          GitHub Gist 配置
         </h2>
 
         <div className="space-y-4">
@@ -93,57 +91,33 @@ export default function AdminSettings() {
               className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
             />
             <p className="text-xs text-slate-400 mt-1">
-              前往 <a href="https://github.com/settings/tokens?type=beta" target="_blank" className="text-blue-500 hover:underline">GitHub</a> 创建 Fine-grained PAT，授予目标仓库 Contents 读写权限
+              需要 Gist 范围权限。前往 <a href="https://github.com/settings/tokens?type=beta" target="_blank" className="text-blue-500 hover:underline">GitHub</a> 创建
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5">仓库所有者（用户名）</label>
-              <input
-                value={form.owner}
-                onChange={(e) => setForm({ ...form, owner: e.target.value })}
-                placeholder="your-username"
-                className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5">仓库名称</label>
-              <input
-                value={form.repo}
-                onChange={(e) => setForm({ ...form, repo: e.target.value })}
-                placeholder="navtab"
-                className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Gist ID</label>
+            <input
+              value={form.repo}
+              onChange={(e) => setForm({ ...form, repo: e.target.value })}
+              placeholder="8c5a5b5c5a5b5c5a5b5c5a5b5c5a5b5c"
+              className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
+            />
+            <p className="text-xs text-slate-400 mt-1">Gist URL 中的 ID 部分，例如 gist.github.com/<span className="font-mono bg-slate-200 dark:bg-slate-800 px-1">8c5a5b5c...</span></p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" />
-                数据文件路径
-              </label>
-              <input
-                value={form.path}
-                onChange={(e) => setForm({ ...form, path: e.target.value })}
-                placeholder="data/bookmarks.yml"
-                className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
-              />
-              <p className="text-xs text-slate-400 mt-1">数据会以 YAML 格式存储在这个文件中</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
-                <GitBranch className="w-3.5 h-3.5" />
-                分支
-              </label>
-              <input
-                value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value })}
-                placeholder="main"
-                className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              数据文件名
+            </label>
+            <input
+              value={form.path}
+              onChange={(e) => setForm({ ...form, path: e.target.value })}
+              placeholder="bookmarks.yml"
+              className="w-full rounded-xl px-4 py-2.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none focus:border-blue-500 transition"
+            />
+            <p className="text-xs text-slate-400 mt-1">数据存储的文件名，默认 bookmarks.yml</p>
           </div>
         </div>
 

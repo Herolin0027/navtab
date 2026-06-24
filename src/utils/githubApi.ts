@@ -12,16 +12,40 @@ function getHeaders(token: string) {
   };
 }
 
+// Gist API - 支持 CORS
+const GIST_API = 'https://api.github.com/gists';
+
+interface GistFile {
+  content: string;
+}
+
+interface GistResponse {
+  id: string;
+  files: Record<string, GistFile>;
+}
+
+// 从 Gist 获取文件内容
 export async function getFile(config: GitHubConfig): Promise<GitHubFileResponse> {
-  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}?ref=${config.branch}`;
-  const res = await fetch(url, {
+  // config.repo 作为 Gist ID 使用
+  const res = await fetch(`${GIST_API}/${config.repo}`, {
     headers: getHeaders(config.token),
   });
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`GitHub API error: ${res.status} ${err}`);
   }
-  return res.json();
+  const gist: GistResponse = await res.json();
+  const fileName = config.path || 'bookmarks.yml';
+  const file = gist.files[fileName];
+
+  if (!file) {
+    throw new Error(`File ${fileName} not found in gist`);
+  }
+
+  return {
+    content: btoa(unescape(encodeURIComponent(file.content))),
+    sha: gist.id, // 使用 gist id 作为 sha
+  };
 }
 
 export async function updateFile(
@@ -29,16 +53,19 @@ export async function updateFile(
   content: string,
   sha: string,
   message = 'Update bookmarks'
-): Promise<void> {
-  const url = `${API_BASE}/repos/${config.owner}/${config.repo}/contents/${config.path}`;
+): Promise<{ sha: string }> {
+  const fileName = config.path || 'bookmarks.yml';
+  const url = `${GIST_API}/${config.repo}`;
   const body = {
-    message,
-    content: btoa(unescape(encodeURIComponent(content))),
-    sha,
-    branch: config.branch,
+    description: message,
+    files: {
+      [fileName]: {
+        content,
+      },
+    },
   };
   const res = await fetch(url, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: getHeaders(config.token),
     body: JSON.stringify(body),
   });
@@ -46,12 +73,43 @@ export async function updateFile(
     const err = await res.text();
     throw new Error(`GitHub API error: ${res.status} ${err}`);
   }
+  const gist: GistResponse = await res.json();
+  return { sha: gist.id };
+}
+
+// 创建新的 Gist
+export async function createGist(
+  config: GitHubConfig,
+  content: string,
+  message = 'Initial bookmarks'
+): Promise<{ sha: string }> {
+  const fileName = config.path || 'bookmarks.yml';
+  const body = {
+    description: message,
+    public: false,
+    files: {
+      [fileName]: {
+        content,
+      },
+    },
+  };
+  const res = await fetch(GIST_API, {
+    method: 'POST',
+    headers: getHeaders(config.token),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GitHub API error: ${res.status} ${err}`);
+  }
+  const gist: GistResponse = await res.json();
+  return { sha: gist.id };
 }
 
 export async function testConnection(config: GitHubConfig): Promise<boolean> {
   try {
-    const url = `${API_BASE}/repos/${config.owner}/${config.repo}`;
-    const res = await fetch(url, {
+    // 测试 Gist 是否可访问
+    const res = await fetch(`${GIST_API}/${config.repo}`, {
       headers: getHeaders(config.token),
     });
     return res.ok;

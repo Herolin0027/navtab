@@ -10,6 +10,7 @@ import {
 import {
   getFile,
   updateFile,
+  createGist,
   parseBookmarks,
   stringifyBookmarks,
   decodeContent,
@@ -104,19 +105,32 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   },
 
   syncFromGitHub: async () => {
-    const { config } = get();
+    const { config, data } = get();
     if (!config) return;
 
     set({ syncing: true, error: null });
     try {
       const file = await getFile(config);
       const content = decodeContent(file);
-      const data = parseBookmarks(content);
-      await setLocalData(data);
+      const parsedData = parseBookmarks(content);
+      await setLocalData(parsedData);
       await setLastSync(Date.now());
-      set({ data, fileSha: file.sha, syncing: false });
+      set({ data: parsedData, fileSha: file.sha, syncing: false });
     } catch (err: any) {
-      set({ error: err.message || '同步失败', syncing: false });
+      // 如果是 404（资源不存在），创建新的 Gist
+      if (err.message && err.message.includes('404')) {
+        try {
+          const content = stringifyBookmarks(data);
+          const result = await createGist(config, content);
+          await setLocalData(data);
+          await setLastSync(Date.now());
+          set({ fileSha: result.sha, syncing: false });
+        } catch (createErr: any) {
+          set({ error: createErr.message || '创建 Gist 失败', syncing: false });
+        }
+      } else {
+        set({ error: err.message || '同步失败', syncing: false });
+      }
     }
   },
 
