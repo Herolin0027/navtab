@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
 import { testConnection } from '@/utils/githubApi';
-import { Key, GitBranch, FileText, Check, AlertCircle } from 'lucide-react';
+import { Key, GitBranch, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function AdminSettings() {
-  const { config, setConfig, data, updateSettings } = useBookmarkStore();
+  const { config, setConfig, data, updateSettings, error } = useBookmarkStore();
 
   const [form, setForm] = useState({
     token: config?.token || '',
@@ -16,15 +16,27 @@ export default function AdminSettings() {
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleSave = async () => {
-    await setConfig({
-      token: form.token,
-      owner: form.owner,
-      repo: form.repo,
-      path: form.path,
-      branch: form.branch,
-    });
+    setSaving(true);
+    setSaveSuccess(false);
+    try {
+      await setConfig({
+        token: form.token,
+        owner: form.owner,
+        repo: form.repo,
+        path: form.path,
+        branch: form.branch,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (e) {
+      console.error('保存失败:', e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTest = async () => {
@@ -162,10 +174,29 @@ export default function AdminSettings() {
           )}
           <button
             onClick={handleSave}
-            className="ml-auto rounded-xl px-5 py-2 text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition"
+            disabled={saving}
+            className="ml-auto rounded-xl px-5 py-2 text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition disabled:bg-blue-400 flex items-center gap-2"
           >
-            保存配置
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                保存中...
+              </>
+            ) : saveSuccess ? (
+              <>
+                <Check className="w-4 h-4" />
+                已保存
+              </>
+            ) : (
+              '保存配置'
+            )}
           </button>
+          {error && (
+            <div className="w-full mt-2 text-sm text-red-500 flex items-center gap-1">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
         </div>
       </div>
 
