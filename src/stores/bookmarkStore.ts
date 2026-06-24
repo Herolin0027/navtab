@@ -23,7 +23,6 @@ interface BookmarkState {
   error: string | null;
   fileSha: string | null;
 
-  // actions
   init: () => Promise<void>;
   loadLocalDataFile: () => Promise<void>;
   setConfig: (config: GitHubConfig) => Promise<void>;
@@ -55,10 +54,11 @@ function getDefaultData(): BookmarkData {
   };
 }
 
-async function syncLocal(state: BookmarkState): Promise<void> {
-  const { config, data } = state;
-  await setLocalData(data);
-  if (config) {
+export const useBookmarkStore = create<BookmarkState>((set, get) => {
+  const syncAfterChange = async () => {
+    const { config, data } = get();
+    await setLocalData(data);
+    if (!config) return;
     try {
       const file = await getFile(config);
       const result = await updateFile(config, stringifyBookmarks(data), file.sha);
@@ -67,225 +67,222 @@ async function syncLocal(state: BookmarkState): Promise<void> {
     } catch (err: any) {
       set({ error: err.message || '同步失败' });
     }
-  }
-}
+  };
 
-export const useBookmarkStore = create<BookmarkState>((set, get) => ({
-  data: getDefaultData(),
-  config: null,
-  loading: true,
-  syncing: false,
-  error: null,
-  fileSha: null,
+  return {
+    data: getDefaultData(),
+    config: null,
+    loading: true,
+    syncing: false,
+    error: null,
+    fileSha: null,
 
-  init: async () => {
-    set({ loading: true, error: null });
-    try {
-      const [localData, localConfig] = await Promise.all([
-        getLocalData(),
-        getLocalConfig(),
-      ]);
+    init: async () => {
+      set({ loading: true, error: null });
+      try {
+        const [localData, localConfig] = await Promise.all([
+          getLocalData(),
+          getLocalConfig(),
+        ]);
 
-      const data = localData || getDefaultData();
-      set({ data, config: localConfig, loading: false });
+        const data = localData || getDefaultData();
+        set({ data, config: localConfig, loading: false });
 
-      if (localConfig) {
-        await get().syncFromGitHub();
-      } else if (import.meta.env.VITE_DATA_FILE) {
-        await get().loadLocalDataFile();
+        if (localConfig) {
+          await get().syncFromGitHub();
+        } else if (import.meta.env.VITE_DATA_FILE) {
+          await get().loadLocalDataFile();
+        }
+      } catch (err: any) {
+        set({ error: err.message || '初始化失败', loading: false });
       }
-    } catch (err: any) {
-      set({ error: err.message || '初始化失败', loading: false });
-    }
-  },
+    },
 
-  loadLocalDataFile: async () => {
-    try {
-      const response = await fetch(import.meta.env.VITE_DATA_FILE);
-      if (!response.ok) throw new Error('文件不存在');
-      const content = await response.text();
-      const data = parseBookmarks(content);
-      await setLocalData(data);
-      set({ data, loading: false });
-    } catch (err: any) {
-      console.log('本地文件加载失败，使用默认数据:', err.message);
-    }
-  },
+    loadLocalDataFile: async () => {
+      try {
+        const response = await fetch(import.meta.env.VITE_DATA_FILE);
+        if (!response.ok) throw new Error('文件不存在');
+        const content = await response.text();
+        const data = parseBookmarks(content);
+        await setLocalData(data);
+        set({ data, loading: false });
+      } catch (err: any) {
+        console.log('本地文件加载失败，使用默认数据:', err.message);
+      }
+    },
 
-  setConfig: async (config) => {
-    await setLocalConfig(config);
-    set({ config });
-    await get().syncFromGitHub();
-  },
+    setConfig: async (config) => {
+      await setLocalConfig(config);
+      set({ config });
+      await get().syncFromGitHub();
+    },
 
-  syncFromGitHub: async () => {
-    const { config } = get();
-    if (!config) return;
+    syncFromGitHub: async () => {
+      const { config } = get();
+      if (!config) return;
 
-    set({ syncing: true, error: null });
-    try {
-      const file = await getFile(config);
-      const content = decodeContent(file);
-      const data = parseBookmarks(content);
-      await setLocalData(data);
-      await setLastSync(Date.now());
-      set({ data, fileSha: file.sha, syncing: false });
-    } catch (err: any) {
-      set({ error: err.message || '同步失败', syncing: false });
-    }
-  },
-
-  syncToGitHub: async () => {
-    const { config, data, fileSha } = get();
-    if (!config) {
-      set({ error: '未配置 GitHub' });
-      return;
-    }
-
-    set({ syncing: true, error: null });
-    try {
-      let currentSha = fileSha;
-      if (!currentSha) {
+      set({ syncing: true, error: null });
+      try {
         const file = await getFile(config);
-        currentSha = file.sha;
+        const content = decodeContent(file);
+        const data = parseBookmarks(content);
+        await setLocalData(data);
+        await setLastSync(Date.now());
+        set({ data, fileSha: file.sha, syncing: false });
+      } catch (err: any) {
+        set({ error: err.message || '同步失败', syncing: false });
       }
-      const content = stringifyBookmarks(data);
-      await updateFile(config, content, currentSha);
-      await setLastSync(Date.now());
+    },
 
-      // refresh sha
-      const newFile = await getFile(config);
-      set({ fileSha: newFile.sha, syncing: false });
-    } catch (err: any) {
-      set({ error: err.message || '推送失败', syncing: false });
-    }
-  },
+    syncToGitHub: async () => {
+      const { config, data, fileSha } = get();
+      if (!config) {
+        set({ error: '未配置 GitHub' });
+        return;
+      }
 
-  addCategory: (category) => {
-    const newCat: Category = {
-      ...category,
-      id: generateId(),
-      links: [],
-    };
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: [...state.data.categories, newCat],
-      },
-    }));
-    syncLocal(get());
-  },
+      set({ syncing: true, error: null });
+      try {
+        let currentSha = fileSha;
+        if (!currentSha) {
+          const file = await getFile(config);
+          currentSha = file.sha;
+        }
+        const content = stringifyBookmarks(data);
+        const result = await updateFile(config, content, currentSha);
+        await setLastSync(Date.now());
+        set({ fileSha: result.sha, syncing: false });
+      } catch (err: any) {
+        set({ error: err.message || '推送失败', syncing: false });
+      }
+    },
 
-  updateCategory: (id, updates) => {
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: state.data.categories.map((cat) =>
-          cat.id === id ? { ...cat, ...updates } : cat
-        ),
-      },
-    }));
-    syncLocal(get());
-  },
+    addCategory: (category) => {
+      const newCat: Category = {
+        ...category,
+        id: generateId(),
+        links: [],
+      };
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: [...state.data.categories, newCat],
+        },
+      }));
+      syncAfterChange();
+    },
 
-  removeCategory: (id) => {
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: state.data.categories.filter((cat) => cat.id !== id),
-      },
-    }));
-    syncLocal(get());
-  },
+    updateCategory: (id, updates) => {
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: state.data.categories.map((cat) =>
+            cat.id === id ? { ...cat, ...updates } : cat
+          ),
+        },
+      }));
+      syncAfterChange();
+    },
 
-  reorderCategories: (ids) => {
-    set((state) => {
-      const map = new Map(state.data.categories.map((c) => [c.id, c]));
-      const categories = ids
-        .map((id) => map.get(id))
-        .filter(Boolean)
-        .map((cat, index) => ({ ...cat!, order: index }));
-      return { data: { ...state.data, categories } };
-    });
-    syncLocal(get());
-  },
+    removeCategory: (id) => {
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: state.data.categories.filter((cat) => cat.id !== id),
+        },
+      }));
+      syncAfterChange();
+    },
 
-  addLink: (categoryId, link) => {
-    const newLink: Link = {
-      ...link,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-    };
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: state.data.categories.map((cat) =>
-          cat.id === categoryId
-            ? { ...cat, links: [...cat.links, newLink] }
-            : cat
-        ),
-      },
-    }));
-    syncLocal(get());
-  },
+    reorderCategories: (ids) => {
+      set((state) => {
+        const map = new Map(state.data.categories.map((c) => [c.id, c]));
+        const categories = ids
+          .map((id) => map.get(id))
+          .filter(Boolean)
+          .map((cat, index) => ({ ...cat!, order: index }));
+        return { data: { ...state.data, categories } };
+      });
+      syncAfterChange();
+    },
 
-  updateLink: (categoryId, linkId, updates) => {
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: state.data.categories.map((cat) =>
-          cat.id === categoryId
-            ? {
-                ...cat,
-                links: cat.links.map((link) =>
-                  link.id === linkId ? { ...link, ...updates } : link
-                ),
-              }
-            : cat
-        ),
-      },
-    }));
-    syncLocal(get());
-  },
+    addLink: (categoryId, link) => {
+      const newLink: Link = {
+        ...link,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+      };
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: state.data.categories.map((cat) =>
+            cat.id === categoryId
+              ? { ...cat, links: [...cat.links, newLink] }
+              : cat
+          ),
+        },
+      }));
+      syncAfterChange();
+    },
 
-  removeLink: (categoryId, linkId) => {
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: state.data.categories.map((cat) =>
-          cat.id === categoryId
-            ? { ...cat, links: cat.links.filter((link) => link.id !== linkId) }
-            : cat
-        ),
-      },
-    }));
-    syncLocal(get());
-  },
+    updateLink: (categoryId, linkId, updates) => {
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: state.data.categories.map((cat) =>
+            cat.id === categoryId
+              ? {
+                  ...cat,
+                  links: cat.links.map((link) =>
+                    link.id === linkId ? { ...link, ...updates } : link
+                  ),
+                }
+              : cat
+          ),
+        },
+      }));
+      syncAfterChange();
+    },
 
-  reorderLinks: (categoryId, linkIds) => {
-    set((state) => ({
-      data: {
-        ...state.data,
-        categories: state.data.categories.map((cat) => {
-          if (cat.id !== categoryId) return cat;
-          const map = new Map(cat.links.map((l) => [l.id, l]));
-          const links = linkIds
-            .map((id) => map.get(id))
-            .filter(Boolean) as Link[];
-          return { ...cat, links };
-        }),
-      },
-    }));
-    syncLocal(get());
-  },
+    removeLink: (categoryId, linkId) => {
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: state.data.categories.map((cat) =>
+            cat.id === categoryId
+              ? { ...cat, links: cat.links.filter((link) => link.id !== linkId) }
+              : cat
+          ),
+        },
+      }));
+      syncAfterChange();
+    },
 
-  updateSettings: (settings) => {
-    set((state) => ({
-      data: {
-        ...state.data,
-        settings: { ...state.data.settings, ...settings },
-      },
-    }));
-    syncLocal(get());
-  },
-}));
+    reorderLinks: (categoryId, linkIds) => {
+      set((state) => ({
+        data: {
+          ...state.data,
+          categories: state.data.categories.map((cat) => {
+            if (cat.id !== categoryId) return cat;
+            const map = new Map(cat.links.map((l) => [l.id, l]));
+            const links = linkIds
+              .map((id) => map.get(id))
+              .filter(Boolean) as Link[];
+            return { ...cat, links };
+          }),
+        },
+      }));
+      syncAfterChange();
+    },
+
+    updateSettings: (settings) => {
+      set((state) => ({
+        data: {
+          ...state.data,
+          settings: { ...state.data.settings, ...settings },
+        },
+      }));
+      syncAfterChange();
+    },
+  };
+});
